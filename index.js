@@ -5,7 +5,6 @@ const csv = require('csv-parser');
 const bodyParser = require('body-parser');
 const Axios = require('axios');
 const express = require('express');
-const { app: myApp, BrowserWindow } = require('electron');
 const cors = require('cors');
 
 
