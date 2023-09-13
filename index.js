@@ -1,16 +1,67 @@
+const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const multer = require('multer');
+const csv = require('csv-parser');
+const bodyParser = require('body-parser');
 const Axios = require('axios');
-const spacy = require('spacy');
 const express = require('express');
+const { app: myApp, BrowserWindow } = require('electron');
 const cors = require('cors');
 
+
+
+// Resto do código...
+
+
+let mainWindow;
+global.sharedData = {
+    message: 'Hello from the main process!',
+  };
+
+function createWindow() {
+    mainWindow = new BrowserWindow({
+      width: 800,
+      height: 600,
+      webPreferences: {// Caminho para o arquivo preload.js
+        nodeIntegration: true // Permitir integração com Node.js
+      }
+    });
+
+    mainWindow.webContents.on('did-finish-load', () => {
+        mainWindow.webContents.send('set-dirname', __dirname);
+      });
+  
+    mainWindow.loadFile('index.html');
+  
+  
+    mainWindow.on('closed', () => {
+      mainWindow = null;
+    });
+  }
+  
+  myApp.on('ready', createWindow);
+  
+  myApp.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+        myApp.quit();
+    }
+  });
+  
+  myApp.on('activate', () => {
+    if (mainWindow === null) {
+      createWindow();
+    }
+  });
+
+
+// Configuração para o multer (para upload de arquivos)
 const app = express();
 app.use(cors());
 const port = 3000;
-
 var isLogged = false;
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-const { Client } = require('whatsapp-web.js');
 const client = new Client();
 const conversations = new Map(); // Mapa para associar chats a arrays de conversa
 const clients = new Map(); // Mapa para associar chats a arrays de conversa
@@ -19,17 +70,42 @@ app.listen(port, () => {
     console.log(`Servidor está rodando em http://0.0.0.0:${port}`);
 });
 
-app.get('/qrcode', (req, res) => {
 
+client.initialize();
+
+const introduction = [
+    "Olá, tudo bem? Sou a atendente virtual da Digital Saúde.\nPara continuarmos com nosso atendimento, preciso que me informe o seu *nome completo*",
+    "Oiii, tudo bem? Sou a atendente virtual da Digital Saúde.\nAntes de iniciarmos a nossa conversa, preciso de algumas informações. *Qual o seu nome?*",
+    "E aí, tudo bem? Sou a atendente virtual da Digital Saúde.\nPara um melhor atendimento, preciso de algumas informações suas, ok? *Qual o seu nome?*"
+];
+
+const email = [
+    "Perfeito, agora eu preciso do seu *email.*",
+    "Perfeito, agora me diga o seu *email.*",
+    "Perfeito! Agora precisamos do seu email para continuar.",
+    "Excelente! Agora, por favor, informe seu email.",
+    "Ótimo! Agora precisamos que você nos forneça seu email para continuar."
+];
+
+app.use(function(req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS,POST,PUT");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.header('content-type', 'application/json');
+    next();
+  });
+
+
+  //Gerar o QRCode && Verificar se o usuario ja esta online
+
+app.get('/qrcode', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         if(!isLogged){
-                client.on('qr', qr => {
-                    qrcode.generate(qr, {small: true});
-                    
-                    // Substitua 'your_qr_code_url' pelo URL real do QR code.
-                    const qrCodeUrl = qr;
-                    
-                    res.send(qrCodeUrl);
-                });
+          let qr = await new Promise((resolve, reject) => {
+              client.once('qr', (qr) => resolve(qr))
+          })
+          res.send(qr)
         }else{
             res.send("isConnected");
         }
@@ -37,12 +113,15 @@ app.get('/qrcode', (req, res) => {
 
 });
 
+app.get('/test', async (req, res) => {res.send("https://doutormultas.com.br/wp-content/uploads/2016/12/qrcode.jpg")});
+app.get('/isLog', async (req, res) => {if(isLogged){res.send("yes")}else{res.send("no")}});
 
+  //Disparar mensagem para contato vindo de um WebHook
 app.post('/receiver', async (req, res) => {
     try {
       const phoneNumber = req.body.phoneNumber; // Número de telefone
-      var introIndex = randomRange(1, 3);
-      const message = introduction[introIndex]; // Mensagem a ser enviada
+      const message = req.body.message; // Número de telefone
+      var introIndex = randomRange(1, 3); // Mensagem a ser enviada
   
       // Verifica se o cliente do WhatsApp está pronto
       if (isLogged) {
@@ -63,31 +142,17 @@ app.post('/receiver', async (req, res) => {
 
 
 
+  
+
+
 client.on('ready', () => {
     console.log('Client is ready!');
     isLogged = true;
 });
 
-client.initialize();
-
-const introduction = [
-    "Olá, tudo bem? Sou a atendente virtual da Digital Saúde.\nPara continuarmos com nosso atendimento, preciso que me informe o seu *nome completo*",
-    "Oiii, tudo bem? Sou a atendente virtual da Digital Saúde.\nAntes de iniciarmos a nossa conversa, preciso de algumas informações. *Qual o seu nome?*",
-    "E aí, tudo bem? Sou a atendente virtual da Digital Saúde.\nPara um melhor atendimento, preciso de algumas informações suas, ok? *Qual o seu nome?*"
-];
-
-const email = [
-    "Perfeito, agora eu preciso do seu *email.*",
-    "Perfeito, agora me diga o seu *email.*",
-    "Perfeito! Agora precisamos do seu email para continuar.",
-    "Excelente! Agora, por favor, informe seu email.",
-    "Ótimo! Agora precisamos que você nos forneça seu email para continuar."
-];
-
-
 
 client.on('message', message => {
-	if(message.body === '!ping') {
+    if(message.body === '!ping') {
         message.reply('pong');
 	}
 });
@@ -266,3 +331,6 @@ client.on('message', async message => {
               
                 return randomInteger;
               }
+
+
+
