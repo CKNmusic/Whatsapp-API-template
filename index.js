@@ -13,7 +13,7 @@ const cors = require('cors');
 // Resto do código...
 
 
-let mainWindow;
+/*let mainWindow;
 global.sharedData = {
     message: 'Hello from the main process!',
   };
@@ -52,7 +52,7 @@ function createWindow() {
       createWindow();
     }
   });
-
+*/
 
 // Configuração para o multer (para upload de arquivos)
 const app = express();
