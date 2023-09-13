@@ -66,8 +66,8 @@ const client = new Client();
 const conversations = new Map(); // Mapa para associar chats a arrays de conversa
 const clients = new Map(); // Mapa para associar chats a arrays de conversa
 
-app.listen(port, () => {
-    console.log(`Servidor está rodando em http://0.0.0.0:${port}`);
+app.listen(port,'0.0.0.0',()=>{
+      console.log("server is listening " + port);
 });
 
 
