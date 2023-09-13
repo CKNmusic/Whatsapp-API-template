@@ -56,7 +56,7 @@ function createWindow() {
 // Configuração para o multer (para upload de arquivos)
 const app = express();
 app.use(cors());
-const port = 3000;
+const port = 3001;
 var isLogged = false;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
