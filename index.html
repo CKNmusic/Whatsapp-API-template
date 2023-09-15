@@ -1,52 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
+
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inputs com Estilo Material Design</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <title>WhatsApp</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-    <style>
-        
-        
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            transition: 1s;
-         }
-
-         .container-box {
-             background-color: white;
-             padding: 50px;
-             border-radius: 0px;
-             box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-             text-align: center;
-            width: 55vh;
-            height: 60vh;
-            transition: 1s !important;
-        }
-
-        .container-box h3 {
-            margin-bottom: 20px;
-        }
-
-        .container-box .row {
-            margin-bottom: 20px;
-        }
-        </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
-    <script src="qrcode.min.js"></script>
-    <div id="blackBox" style="background-color: black; width: 100%;height: 100%;position: fixed;opacity: 0.3;z-index: -22;display:none;"></div>
-    <div  id="cBox" class="container-box">
-        <div style="display:none;" id="qrcode"></div>
-        <div id="messageSender" style="display:none;">
+    <div id="blackBox"
+        style="background-color: black; width: 100%; height: 100%; position: fixed; opacity: 0.3; z-index: 2; display: none;">
+    </div>
+    <div id="cBox" class="container-box">
+        <div style="display: none;" id="qrcode"></div>
+        <div id="messageSender" style="display: none;">
             <div class="row">
                 <div class="input-field col s12">
                     <label for="Minput1">Importar dados</label>
@@ -54,39 +23,42 @@
                 </div>
             </div>
             <div class="row">
-                    <ul id="lista"></ul>
-                    </div>
-                    <div class="row">
-                        <button onclick="enviarDadosParaAPI()" class="btn waves-effect waves-light">disparar
-                        </button>
-                    </div>
-                </div>
-
-                </div>
-
+                <ul id="lista">
+                    <li>Lista vazia</li>
+                </ul>
             </div>
-                <span id="loader" style="display:none;z-index: 3;" class="loader"></span>
-                <div id="login">
-             <div class="row">
-                 <div class="input-field col s12">
-                     <input id="input1" type="text" class="validate">
-                     <label for="input1">Usuário</label>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="input-field col s12">
-                        <input id="input2" type="password" class="validate">
-                        <label for="input2">Senha</label>
-                    </div>
-                </div>
-                <div class="row">
-                    <button onclick="login()" class="btn waves-effect waves-light">Login
-                    </button>
+            <div class="row">
+                <button onclick="enviarDadosParaAPI()" class="btn waves-effect waves-light">disparar</button>
+            </div>
+        </div>
+        <span id="loader" style="display: none; z-index: 3;" class="loader"></span>
+        <div id="login">
+            <div class="row">
+                <div class="input-field col s12">
+                    <input id="input1" type="text" class="validate">
+                    <label for="input1">Usuário</label>
                 </div>
             </div>
-            <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-            <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+            <div class="row">
+                <div class="input-field col s12">
+                    <input id="input2" type="password" class="validate">
+                    <label for="input2">Senha</label>
+                </div>
+            </div>
+            <div class="row">
+                <button onclick="login()" class="btn waves-effect waves-light">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!--Scripts-->
+    <div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+        <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
         <script src="script.js"></script>
-        
-    </body>
+    </div>
+</body>
+
 </html>
