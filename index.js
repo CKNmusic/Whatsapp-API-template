@@ -12,7 +12,11 @@ let isLogged = false;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-const client = new Client();
+const client = new Client({
+    puppeteer: {
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    }
+});
 
 // Inicializar o client do WhatsApp-Web.js
 global.client = client;
