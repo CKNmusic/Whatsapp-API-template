@@ -4,7 +4,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const axios = require('axios');
-
+const fs = require('fs');
+const FormData = require('form-data');
 
 const app = express();
 app.use(cors());
@@ -55,6 +56,73 @@ client.on('message', async (msg) => {
             groupMessageCounters[chat.id._serialized] = 0;
         }
 
+        // Se for áudio
+        if (msg.hasMedia && msg.type === 'audio') {
+            const media = await msg.downloadMedia();
+            const audioBuffer = Buffer.from(media.data, 'base64');
+            const filePath = `./audio_${Date.now()}.ogg`;
+            fs.writeFileSync(filePath, audioBuffer);
+
+            // Envia o arquivo para a API de upload de arquivos
+            const form = new FormData();
+            form.append('file', fs.createReadStream(filePath));
+            let uploadFileId = null;
+            try {
+                const uploadResponse = await axios.post(
+                    'http://189.90.52.228/v1/files/upload',
+                    form,
+                    {
+                        headers: {
+                            ...form.getHeaders(),
+                            'Authorization': 'Bearer app-kHgpjqlF2kCbmY1wdDmsGZkW'
+                        }
+                    }
+                );
+                uploadFileId = uploadResponse.data?.id || uploadResponse.data?.file_id;
+            } catch (err) {
+                console.error('[API File Upload Error]', err.response ? err.response.data : err.message);
+            }
+
+            // Monta o payload para a API principal
+            const payload = {
+                inputs: {},
+                query: '[Áudio enviado]',
+                response_mode: 'blocking',
+                conversation_id: '',
+                user: sender,
+                files: uploadFileId ? [{
+                    type: 'audio',
+                    transfer_method: 'local_file',
+                    upload_file_id: uploadFileId
+                }] : []
+            };
+
+            try {
+                const response = await axios.post(
+                    'http://189.90.52.228/v1/chat-messages',
+                    payload,
+                    {
+                        headers: {
+                            'Authorization': 'Bearer app-kHgpjqlF2kCbmY1wdDmsGZkW',
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+                if (response.data && response.data.answer) {
+                    console.log(`[API Response] ${response.data.answer}`);
+                    await msg.reply(response.data.answer);
+                } else {
+                    console.log('[API Response] Sem resposta de texto.');
+                }
+            } catch (err) {
+                console.error('[API Error]', err.response ? err.response.data : err.message);
+            }
+            // Remove o arquivo temporário
+            fs.unlinkSync(filePath);
+            groupMessageCounters[chat.id._serialized] = 0;
+            return;
+        }
+
         // Só responde se a mensagem começar com 'Bertha'
         if (messageText.trim().toLowerCase().startsWith('bertha')) {
             // Monta o payload para a API
@@ -80,7 +148,6 @@ client.on('message', async (msg) => {
                 );
                 if (response.data && response.data.answer) {
                     console.log(`[API Response] ${response.data.answer}`);
-                    // Envia a resposta para o grupo, marcando a mensagem original
                     await msg.reply(response.data.answer);
                 } else {
                     console.log('[API Response] Sem resposta de texto.');
