@@ -86,7 +86,7 @@ client.on('message', async (msg) => {
                     {
                         headers: {
                             ...whisperForm.getHeaders(),
-                            'Authorization': 'Bearer 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'
+                            'Authorization': 'Bearer API_KEY_OPENAI' // Substitua pela sua chave de API da OpenAI
                         }
                     }
                 );
