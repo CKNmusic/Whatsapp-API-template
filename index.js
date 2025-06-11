@@ -39,6 +39,8 @@ client.on('disconnected', () => {
     isLogged = false;
 });
 
+let groupMessageCounters = {};
+
 // Escuta mensagens recebidas apenas de grupos, envia para API e exibe no terminal
 client.on('message', async (msg) => {
     const chat = await msg.getChat();
@@ -48,36 +50,53 @@ client.on('message', async (msg) => {
         const messageText = msg.body;
         console.log(`[${groupName}] ${sender}: ${messageText}`);
 
-        // Monta o payload para a API
-        const payload = {
-            inputs: {},
-            query: messageText,
-            response_mode: 'blocking',
-            conversation_id: '',
-            user: sender,
-            files: []
-        };
+        // Inicializa o contador para o grupo se não existir
+        if (!groupMessageCounters[chat.id._serialized]) {
+            groupMessageCounters[chat.id._serialized] = 0;
+        }
 
-        try {
-            const response = await axios.post(
-                'http://189.90.52.228/v1/chat-messages',
-                payload,
-                {
-                    headers: {
-                        'Authorization': 'Bearer app-kHgpjqlF2kCbmY1wdDmsGZkW',
-                        'Content-Type': 'application/json'
+        // Só responde se a mensagem começar com 'Bertha'
+        if (messageText.trim().toLowerCase().startsWith('bertha')) {
+            // Monta o payload para a API
+            const payload = {
+                inputs: {},
+                query: messageText,
+                response_mode: 'blocking',
+                conversation_id: '',
+                user: sender,
+                files: []
+            };
+
+            try {
+                const response = await axios.post(
+                    'http://189.90.52.228/v1/chat-messages',
+                    payload,
+                    {
+                        headers: {
+                            'Authorization': 'Bearer app-kHgpjqlF2kCbmY1wdDmsGZkW',
+                            'Content-Type': 'application/json'
+                        }
                     }
+                );
+                if (response.data && response.data.answer) {
+                    console.log(`[API Response] ${response.data.answer}`);
+                    // Envia a resposta para o grupo, marcando a mensagem original
+                    await msg.reply(response.data.answer);
+                } else {
+                    console.log('[API Response] Sem resposta de texto.');
                 }
-            );
-            if (response.data && response.data.answer) {
-                console.log(`[API Response] ${response.data.answer}`);
-                // Envia a resposta para o grupo, marcando a mensagem original
-                await msg.reply(response.data.answer);
-            } else {
-                console.log('[API Response] Sem resposta de texto.');
+            } catch (err) {
+                console.error('[API Error]', err.response ? err.response.data : err.message);
             }
-        } catch (err) {
-            console.error('[API Error]', err.response ? err.response.data : err.message);
+            // Zera o contador após responder
+            groupMessageCounters[chat.id._serialized] = 0;
+        } else {
+            // Incrementa o contador se não for mensagem para a Bertha
+            groupMessageCounters[chat.id._serialized]++;
+            if (groupMessageCounters[chat.id._serialized] >= 5) {
+                await chat.sendMessage("Oi! Se quiser falar comigo, mande 'Bertha' no inicio da sua mensagem! 😊");
+                groupMessageCounters[chat.id._serialized] = 0;
+            }
         }
     }
 });
