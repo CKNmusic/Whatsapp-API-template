@@ -57,68 +57,79 @@ client.on('message', async (msg) => {
         }
 
         // Se for áudio
-        if (msg.hasMedia && msg.type === 'audio') {
+        if (msg.hasMedia) {
+            console.log('DEBUG: msg.type =', msg.type, 'msg.mimetype =', msg.mimetype);
+        }
+        // Aceita também msg.type === 'ptt' (áudio de voz do WhatsApp)
+        if (msg.hasMedia && (msg.type === 'audio' || msg.type === 'ptt')) {
             const media = await msg.downloadMedia();
-            const audioBuffer = Buffer.from(media.data, 'base64');
+            if (!media) {
+                console.error('Falha ao baixar o áudio.');
+                await msg.reply('Falha ao baixar o áudio.');
+                return;
+            }
+            console.log('DEBUG: media.mimetype =', media.mimetype, 'media.filename =', media.filename);
+            // Salva o áudio como ogg para o Whisper
             const filePath = `./audio_${Date.now()}.ogg`;
-            fs.writeFileSync(filePath, audioBuffer);
+            fs.writeFileSync(filePath, Buffer.from(media.data, 'base64'));
 
-            // Envia o arquivo para a API de upload de arquivos
-            const form = new FormData();
-            form.append('file', fs.createReadStream(filePath));
-            let uploadFileId = null;
+            // Envia o arquivo para o Whisper da OpenAI
+            let transcript = null;
             try {
-                const uploadResponse = await axios.post(
-                    'http://189.90.52.228/v1/files/upload',
-                    form,
+                const whisperForm = new FormData();
+                whisperForm.append('file', fs.createReadStream(filePath));
+                whisperForm.append('model', 'whisper-1');
+                console.log('Enviando áudio para o Whisper...');
+                const whisperResponse = await axios.post(
+                    'https://api.openai.com/v1/audio/transcriptions',
+                    whisperForm,
                     {
                         headers: {
-                            ...form.getHeaders(),
-                            'Authorization': 'Bearer app-kHgpjqlF2kCbmY1wdDmsGZkW'
+                            ...whisperForm.getHeaders(),
+                            'Authorization': 'Bearer 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'
                         }
                     }
                 );
-                uploadFileId = uploadResponse.data?.id || uploadResponse.data?.file_id;
+                transcript = whisperResponse.data.text;
+                console.log('Transcrição Whisper:', transcript);
             } catch (err) {
-                console.error('[API File Upload Error]', err.response ? err.response.data : err.message);
+                console.error('[Whisper API Error]', err.response ? err.response.data : err.message);
+                await msg.reply('Erro ao transcrever o áudio.');
             }
-
-            // Monta o payload para a API principal
-            const payload = {
-                inputs: {},
-                query: '[Áudio enviado]',
-                response_mode: 'blocking',
-                conversation_id: '',
-                user: sender,
-                files: uploadFileId ? [{
-                    type: 'audio',
-                    transfer_method: 'local_file',
-                    upload_file_id: uploadFileId
-                }] : []
-            };
-
-            try {
-                const response = await axios.post(
-                    'http://189.90.52.228/v1/chat-messages',
-                    payload,
-                    {
-                        headers: {
-                            'Authorization': 'Bearer app-kHgpjqlF2kCbmY1wdDmsGZkW',
-                            'Content-Type': 'application/json'
+            try { fs.unlinkSync(filePath); } catch (e) { console.error('Erro ao remover arquivo temporário:', e); }
+            if (transcript) {
+                // Envia o texto transcrito para a API da Bertha
+                const payload = {
+                    inputs: {},
+                    query: transcript,
+                    response_mode: 'blocking',
+                    conversation_id: '',
+                    user: sender,
+                    files: []
+                };
+                try {
+                    const response = await axios.post(
+                        'http://189.90.52.228/v1/chat-messages',
+                        payload,
+                        {
+                            headers: {
+                                'Authorization': 'Bearer app-kHgpjqlF2kCbmY1wdDmsGZkW',
+                                'Content-Type': 'application/json'
+                            }
                         }
+                    );
+                    if (response.data && response.data.answer) {
+                        console.log(`[API Response] ${response.data.answer}`);
+                        await msg.reply(response.data.answer);
+                    } else {
+                        console.log('[API Response] Sem resposta de texto.');
                     }
-                );
-                if (response.data && response.data.answer) {
-                    console.log(`[API Response] ${response.data.answer}`);
-                    await msg.reply(response.data.answer);
-                } else {
-                    console.log('[API Response] Sem resposta de texto.');
+                } catch (err) {
+                    console.error('[API Error]', err.response ? err.response.data : err.message);
                 }
-            } catch (err) {
-                console.error('[API Error]', err.response ? err.response.data : err.message);
+            } else if (!media) {
+                await msg.reply('Não consegui transcrever o áudio.');
             }
-            // Remove o arquivo temporário
-            fs.unlinkSync(filePath);
             groupMessageCounters[chat.id._serialized] = 0;
             return;
         }
