@@ -3,6 +3,7 @@ const qrcode = require('qrcode-terminal');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const axios = require('axios');
 
 
 const app = express();
@@ -36,6 +37,47 @@ client.on('authenticated', () => {
 client.on('disconnected', () => {
     console.log('WhatsApp desconectado!');
     isLogged = false;
+});
+
+// Escuta mensagens recebidas apenas de grupos, envia para API e exibe no terminal
+client.on('message', async (msg) => {
+    const chat = await msg.getChat();
+    if (chat.isGroup) {
+        const sender = msg.author || msg.from;
+        const groupName = chat.name;
+        const messageText = msg.body;
+        console.log(`[${groupName}] ${sender}: ${messageText}`);
+
+        // Monta o payload para a API
+        const payload = {
+            inputs: {},
+            query: messageText,
+            response_mode: 'blocking',
+            conversation_id: '',
+            user: sender,
+            files: []
+        };
+
+        try {
+            const response = await axios.post(
+                'http://189.90.52.228/v1/chat-messages',
+                payload,
+                {
+                    headers: {
+                        'Authorization': 'Bearer app-kHgpjqlF2kCbmY1wdDmsGZkW',
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            if (response.data && response.data.answer) {
+                console.log(`[API Response] ${response.data.answer}`);
+            } else {
+                console.log('[API Response] Sem resposta de texto.');
+            }
+        } catch (err) {
+            console.error('[API Error]', err.response ? err.response.data : err.message);
+        }
+    }
 });
 
 // Endpoint para checar se está logado
