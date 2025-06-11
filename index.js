@@ -71,6 +71,8 @@ client.on('message', async (msg) => {
             );
             if (response.data && response.data.answer) {
                 console.log(`[API Response] ${response.data.answer}`);
+                // Envia a resposta para o grupo, marcando a mensagem original
+                await msg.reply(response.data.answer);
             } else {
                 console.log('[API Response] Sem resposta de texto.');
             }
