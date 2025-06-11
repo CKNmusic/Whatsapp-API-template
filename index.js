@@ -123,8 +123,13 @@ client.on('message', async (msg) => {
             return;
         }
 
-        // Só responde se a mensagem começar com 'Bertha'
-        if (messageText.trim().toLowerCase().startsWith('bertha')) {
+        // Só responde se a mensagem começar com 'Bertha', 'Berta' ou 'Beta' (case-insensitive)
+        const lowered = messageText.trim().toLowerCase();
+        if (
+            lowered.startsWith('bertha') ||
+            lowered.startsWith('berta') ||
+            lowered.startsWith('beta')
+        ) {
             // Monta o payload para a API
             const payload = {
                 inputs: {},
@@ -158,7 +163,7 @@ client.on('message', async (msg) => {
             // Zera o contador após responder
             groupMessageCounters[chat.id._serialized] = 0;
         } else {
-            // Incrementa o contador se não for mensagem para a Bertha
+            // Incrementa o contador se não for mensagem para a Bertha/Berta/Beta
             groupMessageCounters[chat.id._serialized]++;
             if (groupMessageCounters[chat.id._serialized] >= 5) {
                 await chat.sendMessage("Oi! Se quiser falar comigo, mande 'Bertha' no inicio da sua mensagem! 😊");
