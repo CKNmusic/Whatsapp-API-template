@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>WhatsApp Multi-Sessão Demo</title>
+    <style>
+        body {
+            font-family: Roboto, Arial, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        .mui-appbar {
+            background: #1976d2;
+            color: #fff;
+            padding: 16px 32px;
+            font-size: 1.5em;
+            letter-spacing: 1px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+        .mui-tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            background: #fff;
+        }
+        .mui-tab {
+            padding: 16px 32px;
+            cursor: pointer;
+            color: #1976d2;
+            border: none;
+            background: none;
+            font-size: 1em;
+            outline: none;
+            transition: background 0.2s;
+        }
+        .mui-tab.active {
+            border-bottom: 3px solid #1976d2;
+            background: #e3f2fd;
+            color: #0d47a1;
+        }
+        .mui-tab-close {
+            margin-left: 8px;
+            color: #888;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .mui-add-tab {
+            padding: 16px 24px;
+            color: #1976d2;
+            font-size: 1.2em;
+            cursor: pointer;
+            background: none;
+            border: none;
+            outline: none;
+        }
+        .mui-content {
+            background: #fff;
+            margin: 24px auto;
+            padding: 32px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            max-width: 500px;
+        }
+        .mui-field {
+            margin-bottom: 18px;
+        }
+        .mui-label {
+            display: block;
+            font-size: 1em;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .mui-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #bdbdbd;
+            border-radius: 4px;
+            font-size: 1em;
+            background: #fafafa;
+            transition: border 0.2s;
+        }
+        .mui-input:focus {
+            border: 1.5px solid #1976d2;
+            outline: none;
+            background: #fff;
+        }
+        .mui-btn {
+            background: #1976d2;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 22px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-right: 8px;
+            margin-top: 8px;
+            transition: background 0.2s;
+        }
+        .mui-btn:hover {
+            background: #1565c0;
+        }
+        #qr {
+            margin: 16px 0;
+            text-align: center;
+        }
+        #qr img {
+            width: 180px;
+            height: 180px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            background: #fff;
+        }
+        .mui-status {
+            font-size: 1.1em;
+            margin: 10px 0 18px 0;
+            color: #1976d2;
+        }
+        .mui-result {
+            margin-top: 10px;
+            color: #388e3c;
+        }
+        .mui-error {
+            margin-top: 10px;
+            color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="mui-appbar">WhatsApp Multi-Sessão</div>
+    <div class="mui-tabs" id="tabs"></div>
+    <div id="tab-content"></div>
+
+    <script>
+        // Estado das abas
+        let sessions = [];
+        let activeTab = 0;
+
+        function renderTabs() {
+            const tabsDiv = document.getElementById('tabs');
+            tabsDiv.innerHTML = '';
+            sessions.forEach((s, i) => {
+                const tab = document.createElement('button');
+                tab.className = 'mui-tab' + (i === activeTab ? ' active' : '');
+                tab.innerHTML = `<span>${s.token}</span>` +
+                    `<span class="mui-tab-close" onclick="closeTab(event,${i})">&times;</span>`;
+                tab.onclick = () => { activeTab = i; renderTabs(); renderTabContent(); };
+                tabsDiv.appendChild(tab);
+            });
+            // Botão de adicionar nova aba
+            const addBtn = document.createElement('button');
+            addBtn.className = 'mui-add-tab';
+            addBtn.innerHTML = '+';
+            addBtn.onclick = () => {
+                const token = prompt('Informe um token único para a nova sessão:');
+                if (token && !sessions.find(s => s.token === token.trim())) {
+                    sessions.push({
+                        token: token.trim(),
+                        status: '',
+                        qr: '',
+                        phoneNumber: '',
+                        message: '',
+                        result: '',
+                        error: ''
+                    });
+                    activeTab = sessions.length - 1;
+                    renderTabs();
+                    renderTabContent();
+                }
+            };
+            tabsDiv.appendChild(addBtn);
+        }
+
+        function closeTab(e, idx) {
+            e.stopPropagation();
+            sessions.splice(idx, 1);
+            if (activeTab >= sessions.length) activeTab = sessions.length - 1;
+            renderTabs();
+            renderTabContent();
+        }
+
+        function renderTabContent() {
+            const content = document.getElementById('tab-content');
+            if (sessions.length === 0) {
+                content.innerHTML = `
+                    <div class="mui-content" style="text-align:center;">
+                        <p>Nenhuma sessão criada.</p>
+                        <button class="mui-btn" onclick="document.querySelector('.mui-add-tab').click()">Criar Sessão</button>
+                    </div>`;
+                return;
+            }
+            const s = sessions[activeTab];
+            content.innerHTML = `
+                <div class="mui-content">
+                    <div class="mui-field">
+                        <span class="mui-label">Token da Sessão:</span>
+                        <input class="mui-input" value="${s.token}" disabled />
+                    </div>
+                    <div>
+                        <button class="mui-btn" onclick="checkStatus(${activeTab})">Verificar Status</button>
+                        <button class="mui-btn" onclick="getQrCode(${activeTab})">Obter QR Code</button>
+                    </div>
+                    <div class="mui-status" id="status${activeTab}">${s.status ? 'Status: ' + s.status : ''}</div>
+                    <div id="qr${activeTab}" style="text-align:center;">${s.qr ? `<img src="${s.qr}" alt="QR Code" />` : ''}</div>
+                    <hr style="margin:24px 0;">
+                    <div class="mui-field">
+                        <span class="mui-label">Número (com DDI, ex: 5511999999999):</span>
+                        <input class="mui-input" id="phone${activeTab}" value="${s.phoneNumber || ''}" />
+                    </div>
+                    <div class="mui-field">
+                        <span class="mui-label">Mensagem:</span>
+                        <input class="mui-input" id="msg${activeTab}" value="${s.message || ''}" />
+                    </div>
+                    <button class="mui-btn" onclick="sendMsg(${activeTab})">Enviar Mensagem</button>
+                    <div class="mui-result" id="result${activeTab}">${s.result || ''}</div>
+                    <div class="mui-error" id="error${activeTab}">${s.error || ''}</div>
+                </div>
+            `;
+        }
+
+        function checkStatus(idx) {
+            const s = sessions[idx];
+            fetch(`/status/${encodeURIComponent(s.token)}`)
+                .then(r => r.json())
+                .then(d => {
+                    s.status = d.status;
+                    document.getElementById('status' + idx).innerText = 'Status: ' + d.status;
+                })
+                .catch(() => {
+                    s.status = '';
+                    document.getElementById('status' + idx).innerText = 'Erro ao consultar status';
+                });
+        }
+
+        function getQrCode(idx) {
+            const s = sessions[idx];
+            document.getElementById('qr' + idx).innerHTML = 'Carregando QR code...';
+            fetch(`/qrcode/${encodeURIComponent(s.token)}`)
+                .then(r => {
+                    if (!r.ok) throw new Error('QR não disponível');
+                    return r.json();
+                })
+                .then(d => {
+                    s.qr = d.qr;
+                    document.getElementById('qr' + idx).innerHTML = `<img src="${d.qr}" alt="QR Code" />`;
+                })
+                .catch(e => {
+                    s.qr = '';
+                    document.getElementById('qr' + idx).innerText = 'Erro: ' + e.message;
+                });
+        }
+
+        function sendMsg(idx) {
+            const s = sessions[idx];
+            const phoneNumber = document.getElementById('phone' + idx).value.trim();
+            const message = document.getElementById('msg' + idx).value.trim();
+            s.phoneNumber = phoneNumber;
+            s.message = message;
+            s.result = '';
+            s.error = '';
+            document.getElementById('result' + idx).innerText = '';
+            document.getElementById('error' + idx).innerText = '';
+            fetch(`/send/${encodeURIComponent(s.token)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phoneNumber, message })
+            })
+            .then(r => r.text().then(t => ({ ok: r.ok, t })))
+            .then(({ ok, t }) => {
+                if (ok) {
+                    s.result = t;
+                    document.getElementById('result' + idx).innerText = t;
+                } else {
+                    s.error = t;
+                    document.getElementById('error' + idx).innerText = t;
+                }
+            })
+            .catch(e => {
+                s.error = 'Erro: ' + e.message;
+                document.getElementById('error' + idx).innerText = s.error;
+            });
+        }
+
+        // Inicialização
+        renderTabs();
+        renderTabContent();
+
+        // Expor funções para onclick inline
+        window.closeTab = closeTab;
+        window.checkStatus = checkStatus;
+        window.getQrCode = getQrCode;
+        window.sendMsg = sendMsg;
+    </script>
+</body>
+</html>
