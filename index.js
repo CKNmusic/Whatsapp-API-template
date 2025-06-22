@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const qrcode = require('qrcode');
 const axios = require('axios');
+const https = require('https');
 
 const app = express();
 app.use(cors());
@@ -15,10 +16,38 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Configuração
 const SESSIONS_DIR = path.join(__dirname, 'sessions');
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutos (ajuste conforme necessário)
-const WEBHOOK_URL = process.env.WHATSAPP_WEBHOOK_URL || null; // opcional
+const SESSIONS_JSON = path.join(__dirname, 'sessions.json');
+const WEBHOOK_URL = process.env.WHATSAPP_WEBHOOK_URL || null;
+
+const SSL_KEY_PATH = path.join(__dirname, 'ssl', 'key.pem');
+const SSL_CERT_PATH = path.join(__dirname, 'ssl', 'cert.pem');
 
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR);
+
+// Funções para gerenciar sessions.json
+function loadSessionsJson() {
+    try {
+        if (!fs.existsSync(SESSIONS_JSON)) {
+            fs.writeFileSync(SESSIONS_JSON, '[]');
+            return [];
+        }
+        return JSON.parse(fs.readFileSync(SESSIONS_JSON, 'utf8'));
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveSessionsJson(tokens) {
+    fs.writeFileSync(SESSIONS_JSON, JSON.stringify(tokens, null, 2));
+}
+
+function addTokenToJson(token) {
+    const tokens = loadSessionsJson();
+    if (!tokens.includes(token)) {
+        tokens.push(token);
+        saveSessionsJson(tokens);
+    }
+}
 
 // Gerenciamento de sessões
 const sessions = {}; // { [token]: { client, timeout, status, lastQr } }
@@ -30,6 +59,8 @@ function getSessionPath(token) {
 function createClient(token) {
     if (sessions[token]) return sessions[token].client;
 
+    addTokenToJson(token); // Registra o token permanentemente
+
     const client = new Client({
         authStrategy: new LocalAuth({ dataPath: getSessionPath(token) }),
         puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox'] }
@@ -38,8 +69,7 @@ function createClient(token) {
     sessions[token] = {
         client,
         status: 'INITIALIZING',
-        lastQr: null,
-        timeout: null
+        lastQr: null
     };
 
     // Eventos
@@ -51,23 +81,18 @@ function createClient(token) {
     client.on('ready', () => {
         sessions[token].status = 'CONNECTED';
         sessions[token].lastQr = null;
-        resetInactivityTimeout(token);
     });
 
     client.on('authenticated', () => {
         sessions[token].status = 'AUTHENTICATED';
-        resetInactivityTimeout(token);
     });
 
     client.on('disconnected', () => {
         sessions[token].status = 'DISCONNECTED';
-        clearTimeout(sessions[token].timeout);
-        sessions[token].timeout = null;
-        // Não remove sessão do disco, só fecha instância
+        // Mantém a sessão na memória, apenas marca como desconectada
     });
 
     client.on('message', async (msg) => {
-        resetInactivityTimeout(token);
         // Integração com webhook, se configurado
         if (WEBHOOK_URL) {
             try {
@@ -87,19 +112,6 @@ function createClient(token) {
 
     client.initialize();
     return client;
-}
-
-function resetInactivityTimeout(token) {
-    if (!sessions[token]) return;
-    if (sessions[token].timeout) clearTimeout(sessions[token].timeout);
-    sessions[token].timeout = setTimeout(() => {
-        if (sessions[token]) {
-            sessions[token].client.destroy();
-            sessions[token].status = 'INACTIVE';
-            sessions[token].timeout = null;
-            console.log(`Sessão ${token} fechada por inatividade.`);
-        }
-    }, INACTIVITY_TIMEOUT);
 }
 
 // Endpoint: status da sessão
@@ -169,7 +181,6 @@ app.post('/send/:token', async (req, res) => {
         await new Promise(waitForReady);
         const chatId = phoneNumber + '@c.us';
         await client.sendMessage(chatId, message);
-        resetInactivityTimeout(token);
         res.send('Mensagem enviada com sucesso!');
     } catch (e) {
         res.status(500).send('Erro ao enviar mensagem: ' + e);
@@ -186,10 +197,65 @@ app.get('/', (req, res) => {
 
 // Exemplo de endpoint para receber mensagens via webhook já incluso no evento 'message'
 
-// Inicialização do servidor
-app.listen(port, () => {
-    console.log(`Servidor multi-sessão rodando em http://0.0.0.0:${port}`);
+// Função para garantir que toda sessão cadastrada no JSON aparece no front, mesmo se não existir a pasta
+app.get('/sessions', (req, res) => {
+    const tokens = loadSessionsJson();
+    const sessionsList = tokens.map(token => {
+        const sessionPath = getSessionPath(token);
+        let status = 'REMOVED';
+        if (sessions[token]) {
+            status = sessions[token].status;
+        } else if (fs.existsSync(sessionPath)) {
+            status = 'INACTIVE';
+        }
+        return { token, status };
+    });
+    res.json({ sessions: sessionsList });
 });
+
+// Endpoint para criar/cadastrar uma nova sessão manualmente (fixa no JSON)
+app.post('/sessions', (req, res) => {
+    const { token } = req.body;
+    if (!token || typeof token !== 'string' || !token.trim()) {
+        return res.status(400).json({ error: 'Token inválido.' });
+    }
+    addTokenToJson(token.trim());
+    res.json({ message: 'Sessão cadastrada no sistema.', token: token.trim() });
+});
+
+// Inicializar sessões salvas ao iniciar o servidor (garante que todas do JSON são carregadas)
+const savedTokens = loadSessionsJson();
+savedTokens.forEach(token => {
+    // Cria a pasta se não existir (mantém controle total)
+    const sessionPath = getSessionPath(token);
+    if (!fs.existsSync(sessionPath)) {
+        fs.mkdirSync(sessionPath, { recursive: true });
+    }
+    createClient(token);
+});
+
+// Inicialização do servidor
+let server;
+if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
+    const sslOptions = {
+        key: fs.readFileSync(SSL_KEY_PATH),
+        cert: fs.readFileSync(SSL_CERT_PATH)
+    };
+    server = https.createServer(sslOptions, app);
+    server.listen(port, () => {
+        console.log(`Servidor multi-sessão rodando em https://0.0.0.0:${port}`);
+    }).on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.error(`Erro: porta ${port} já está em uso. Finalize o outro processo ou escolha outra porta.`);
+            process.exit(1);
+        } else {
+            throw err;
+        }
+    });
+} else {
+    console.error('Certificado SSL não encontrado. Gere os arquivos ssl/key.pem e ssl/cert.pem para usar HTTPS.');
+    process.exit(1);
+}
 
 
 

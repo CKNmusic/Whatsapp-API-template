@@ -1,0 +1,66 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2024-06-07T00:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v2024.2.2",
+  "resources": [
+    {
+      "_id": "wrk_waapi",
+      "name": "WhatsApp Multi-Sessão API",
+      "description": "",
+      "scope": "collection",
+      "_type": "workspace"
+    },
+    {
+      "_id": "env_waapi",
+      "parentId": "wrk_waapi",
+      "_type": "environment",
+      "name": "Base Environment",
+      "data": {
+        "base_url": "http://localhost:3460"
+      }
+    },
+    {
+      "_id": "fld_endpoints",
+      "_type": "request_group",
+      "parentId": "wrk_waapi",
+      "name": "Endpoints"
+    },
+    {
+      "_id": "req_sessions",
+      "parentId": "fld_endpoints",
+      "_type": "request",
+      "name": "Listar sessões existentes",
+      "method": "GET",
+      "url": "{{ base_url }}/sessions"
+    },
+    {
+      "_id": "req_status",
+      "parentId": "fld_endpoints",
+      "_type": "request",
+      "name": "Verificar status da sessão",
+      "method": "GET",
+      "url": "{{ base_url }}/status/empresa123"
+    },
+    {
+      "_id": "req_qrcode",
+      "parentId": "fld_endpoints",
+      "_type": "request",
+      "name": "Obter QR code para autenticação",
+      "method": "GET",
+      "url": "{{ base_url }}/qrcode/empresa123"
+    },
+    {
+      "_id": "req_send",
+      "parentId": "fld_endpoints",
+      "_type": "request",
+      "name": "Enviar mensagem",
+      "method": "POST",
+      "url": "{{ base_url }}/send/empresa123",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"phoneNumber\": \"5511999999999\",\n  \"message\": \"Olá!\"\n}"
+      }
+    }
+  ]
+}
