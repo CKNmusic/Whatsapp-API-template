@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -162,7 +163,7 @@ app.get('/qrcode/:token', async (req, res) => {
 });
 
 // Endpoint: enviar mensagem
-app.post('/send/:token', async (req, res) => {
+app.post('/send/:token', requireApiToken, async (req, res) => {
     const { token } = req.params;
     const { phoneNumber, message } = req.body;
     if (!phoneNumber || !message) {
