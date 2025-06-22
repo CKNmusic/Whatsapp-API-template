@@ -10,7 +10,7 @@ const https = require('https');
 
 const app = express();
 app.use(cors());
-const port = 3460;
+const port = 443;
 const HTTPS_PORT = 443;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
