@@ -301,22 +301,22 @@ if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
         }
     });
 
-    // Porta 443 (padrão HTTPS)
-    https.createServer(sslOptions, app).listen(HTTPS_PORT, () => {
-        console.log(`Servidor multi-sessão rodando em https://0.0.0.0:${HTTPS_PORT}`);
-    }).on('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-            console.error(`Erro: porta ${HTTPS_PORT} já está em uso. Finalize o outro processo ou escolha outra porta.`);
-        } else {
-            throw err;
-        }
-    });
+    // Porta 443 (padrão HTTPS) - só sobe se for diferente da principal
+    if (HTTPS_PORT !== port) {
+        https.createServer(sslOptions, app).listen(HTTPS_PORT, () => {
+            console.log(`Servidor multi-sessão rodando em https://0.0.0.0:${HTTPS_PORT}`);
+        }).on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                console.error(`Erro: porta ${HTTPS_PORT} já está em uso. Finalize o outro processo ou escolha outra porta.`);
+            } else {
+                throw err;
+            }
+        });
+    }
 } else {
     console.error('Certificado SSL não encontrado em /etc/letsencrypt/live/wsapi.freedomai.dev.br/.');
     process.exit(1);
 }
-    server.listen(port, () => {
-        console.log(`Servidor multi-sessão rodando em https://0.0.0.0:${port}`);
     }).on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
             console.error(`Erro: porta ${port} já está em uso. Finalize o outro processo ou escolha outra porta.`);
