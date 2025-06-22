@@ -163,7 +163,7 @@ app.get('/qrcode/:token', async (req, res) => {
 });
 
 // Endpoint: enviar mensagem
-app.post('/send/:token', requireApiToken, async (req, res) => {
+app.post('/send/:token', async (req, res) => {
     const { token } = req.params;
     const { phoneNumber, message } = req.body;
     if (!phoneNumber || !message) {
@@ -242,7 +242,7 @@ savedTokens.forEach(token => {
 // 1. Permitir apenas origens específicas no CORS (ajuste para seu domínio)
 app.use(cors({
     origin: [
-        'https://wsapi.freedomai.dev.br', // ajuste para seu domínio real
+        'https://wsapi.freedomai.dev.br',
         'http://localhost:3000'
     ]
 }));
@@ -258,52 +258,27 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '200kb' }));
 // 4. Rate limit para evitar brute force/DDOS
 const rateLimit = require('express-rate-limit');
 const apiLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minuto
-    max: 30, // 60 requisições por minuto por IP
+    windowMs: 60 * 1000,
+    max: 30,
     standardHeaders: true,
     legacyHeaders: false,
 });
-app.use('/send', apiLimiter);
-app.use('/qrcode', apiLimiter);
-app.use('/status', apiLimiter);
+app.use(apiLimiter);
 
-// 5. (Opcional) Autenticação por token simples para endpoints sensíveis
-// Gere um token forte e salve em .env ou defina aqui para teste
-const API_TOKEN = process.env.API_TOKEN || 'd2e4e6c8-8b2a-4f7b-9c7e-1a2b3c4d5e6f'; // Troque por um valor seguro
-
+// 5. Autenticação por token obrigatória para TODOS os endpoints da API
+const API_TOKEN = process.env.API_TOKEN || 'd2e4e6c8-8b2a-4f7b-9c7e-1a2b3c4d5e6f';
 function requireApiToken(req, res, next) {
-    if (!API_TOKEN) return next();
     const token = req.headers['x-api-token'] || req.query.api_token;
     if (token === API_TOKEN) return next();
-    return res.status(401).json({ error: 'Token de API inválido.' });
+    return res.status(401).json({ error: 'Token de API obrigatório. Envie no header x-api-token ou ?api_token=...' });
 }
-
-// Exemplo: proteger envio de mensagem
-app.post('/send/:token', requireApiToken, async (req, res) => {
-    const { token } = req.params;
-    const { phoneNumber, message } = req.body;
-    if (!phoneNumber || !message) {
-        return res.status(400).send('Informe phoneNumber e message no body.');
+// Aplica o middleware globalmente (exceto arquivos estáticos)
+app.use((req, res, next) => {
+    // Permite acesso livre apenas a arquivos estáticos
+    if (req.path.startsWith('/static') || req.path.startsWith('/public') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.ico')) {
+        return next();
     }
-    let client = sessions[token]?.client;
-    if (!client) client = createClient(token);
-
-    // Aguarda conexão
-    let tries = 0;
-    function waitForReady(resolve, reject) {
-        if (sessions[token].status === 'CONNECTED') return resolve();
-        if (sessions[token].status === 'QRCODE') return reject('Sessão não autenticada. Escaneie o QR code.');
-        if (++tries > 20) return reject('Timeout ao conectar sessão');
-        setTimeout(() => waitForReady(resolve, reject), 500);
-    }
-    try {
-        await new Promise(waitForReady);
-        const chatId = phoneNumber + '@c.us';
-        await client.sendMessage(chatId, message);
-        res.send('Mensagem enviada com sucesso!');
-    } catch (e) {
-        res.status(500).send('Erro ao enviar mensagem: ' + e);
-    }
+    return requireApiToken(req, res, next);
 });
 
 // Inicialização do servidor
@@ -315,6 +290,31 @@ if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
     };
     // Sobe em ambas as portas: 3460 e 443
     server = https.createServer(sslOptions, app);
+    server.listen(port, () => {
+        console.log(`Servidor multi-sessão rodando em https://0.0.0.0:${port}`);
+    }).on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.error(`Erro: porta ${port} já está em uso. Finalize o outro processo ou escolha outra porta.`);
+            process.exit(1);
+        } else {
+            throw err;
+        }
+    });
+
+    // Porta 443 (padrão HTTPS)
+    https.createServer(sslOptions, app).listen(HTTPS_PORT, () => {
+        console.log(`Servidor multi-sessão rodando em https://0.0.0.0:${HTTPS_PORT}`);
+    }).on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.error(`Erro: porta ${HTTPS_PORT} já está em uso. Finalize o outro processo ou escolha outra porta.`);
+        } else {
+            throw err;
+        }
+    });
+} else {
+    console.error('Certificado SSL não encontrado em /etc/letsencrypt/live/wsapi.freedomai.dev.br/.');
+    process.exit(1);
+}
     server.listen(port, () => {
         console.log(`Servidor multi-sessão rodando em https://0.0.0.0:${port}`);
     }).on('error', (err) => {
