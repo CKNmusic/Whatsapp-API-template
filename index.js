@@ -11,6 +11,7 @@ const https = require('https');
 const app = express();
 app.use(cors());
 const port = 3460;
+const HTTPS_PORT = 443;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -19,8 +20,9 @@ const SESSIONS_DIR = path.join(__dirname, 'sessions');
 const SESSIONS_JSON = path.join(__dirname, 'sessions.json');
 const WEBHOOK_URL = process.env.WHATSAPP_WEBHOOK_URL || null;
 
-const SSL_KEY_PATH = path.join(__dirname, 'ssl', 'key.pem');
-const SSL_CERT_PATH = path.join(__dirname, 'ssl', 'cert.pem');
+// Use certificados do Let's Encrypt no servidor remoto
+const SSL_KEY_PATH = '/etc/letsencrypt/live/wsapi.freedomai.dev.br/privkey.pem';
+const SSL_CERT_PATH = '/etc/letsencrypt/live/wsapi.freedomai.dev.br/fullchain.pem';
 
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR);
 
@@ -241,6 +243,7 @@ if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
         key: fs.readFileSync(SSL_KEY_PATH),
         cert: fs.readFileSync(SSL_CERT_PATH)
     };
+    // Sobe em ambas as portas: 3460 e 443
     server = https.createServer(sslOptions, app);
     server.listen(port, () => {
         console.log(`Servidor multi-sessão rodando em https://0.0.0.0:${port}`);
@@ -252,8 +255,19 @@ if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
             throw err;
         }
     });
+
+    // Porta 443 (padrão HTTPS)
+    https.createServer(sslOptions, app).listen(HTTPS_PORT, () => {
+        console.log(`Servidor multi-sessão rodando em https://0.0.0.0:${HTTPS_PORT}`);
+    }).on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.error(`Erro: porta ${HTTPS_PORT} já está em uso. Finalize o outro processo ou escolha outra porta.`);
+        } else {
+            throw err;
+        }
+    });
 } else {
-    console.error('Certificado SSL não encontrado. Gere os arquivos ssl/key.pem e ssl/cert.pem para usar HTTPS.');
+    console.error('Certificado SSL não encontrado em /etc/letsencrypt/live/wsapi.freedomai.dev.br/.');
     process.exit(1);
 }
 
