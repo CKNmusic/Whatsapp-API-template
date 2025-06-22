@@ -236,6 +236,75 @@ savedTokens.forEach(token => {
     createClient(token);
 });
 
+// Segurança extra para a API
+
+// 1. Permitir apenas origens específicas no CORS (ajuste para seu domínio)
+app.use(cors({
+    origin: [
+        'https://wsapi.freedomai.dev.br', // ajuste para seu domínio real
+        'http://localhost:3000'
+    ]
+}));
+
+// 2. Helmet para headers de segurança
+const helmet = require('helmet');
+app.use(helmet());
+
+// 3. Limitar tamanho do body para evitar ataques de payload grande
+app.use(bodyParser.json({ limit: '200kb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '200kb' }));
+
+// 4. Rate limit para evitar brute force/DDOS
+const rateLimit = require('express-rate-limit');
+const apiLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minuto
+    max: 30, // 60 requisições por minuto por IP
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/send', apiLimiter);
+app.use('/qrcode', apiLimiter);
+app.use('/status', apiLimiter);
+
+// 5. (Opcional) Autenticação por token simples para endpoints sensíveis
+// Gere um token forte e salve em .env ou defina aqui para teste
+const API_TOKEN = process.env.API_TOKEN || 'd2e4e6c8-8b2a-4f7b-9c7e-1a2b3c4d5e6f'; // Troque por um valor seguro
+
+function requireApiToken(req, res, next) {
+    if (!API_TOKEN) return next();
+    const token = req.headers['x-api-token'] || req.query.api_token;
+    if (token === API_TOKEN) return next();
+    return res.status(401).json({ error: 'Token de API inválido.' });
+}
+
+// Exemplo: proteger envio de mensagem
+app.post('/send/:token', requireApiToken, async (req, res) => {
+    const { token } = req.params;
+    const { phoneNumber, message } = req.body;
+    if (!phoneNumber || !message) {
+        return res.status(400).send('Informe phoneNumber e message no body.');
+    }
+    let client = sessions[token]?.client;
+    if (!client) client = createClient(token);
+
+    // Aguarda conexão
+    let tries = 0;
+    function waitForReady(resolve, reject) {
+        if (sessions[token].status === 'CONNECTED') return resolve();
+        if (sessions[token].status === 'QRCODE') return reject('Sessão não autenticada. Escaneie o QR code.');
+        if (++tries > 20) return reject('Timeout ao conectar sessão');
+        setTimeout(() => waitForReady(resolve, reject), 500);
+    }
+    try {
+        await new Promise(waitForReady);
+        const chatId = phoneNumber + '@c.us';
+        await client.sendMessage(chatId, message);
+        res.send('Mensagem enviada com sucesso!');
+    } catch (e) {
+        res.status(500).send('Erro ao enviar mensagem: ' + e);
+    }
+});
+
 // Inicialização do servidor
 let server;
 if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
